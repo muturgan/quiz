@@ -5,6 +5,14 @@ const { InsuranceOffer } = require('../models/InsuranceOffer');
 const insuranceRouter = new Router();
 
 
+const calculatePrice = function(res, basePrice, completedAgreementsCount) {
+   const discount = (100 - completedAgreementsCount) / 100;
+   res.locals.discount = discount;
+   const price = basePrice * discount;
+   return price;
+};
+
+
 insuranceRouter.get('/price/:type', async (req, res) => {
    try {
       const userId = res.locals.userId;
@@ -22,7 +30,7 @@ insuranceRouter.get('/price/:type', async (req, res) => {
 
       const basePrice = insuranceRows[0].price;
       const completedAgreementsCount = agreementsRows[0].count;
-      const price = basePrice * (100 - completedAgreementsCount) / 100;
+      const price = calculatePrice(res, basePrice, completedAgreementsCount);
 
       const insuranceOffer = new InsuranceOffer();
       insuranceOffer.type = insuranceType;
