@@ -1,40 +1,36 @@
-const { Router } = require('express');
-const { pool } = require('../db');
-const { InsuranceOffer } = require('../models/InsuranceOffer');
+var { Router } = require('express');
+var { pool } = require('../db');
+var redisClient = require('../redis');
+var { InsuranceOffer } = require('../models/InsuranceOffer');
 
-const insuranceRouter = new Router();
-
-
-const calculatePrice = function(res, basePrice, completedAgreementsCount) {
-   const discount = (100 - completedAgreementsCount) / 100;
-   res.locals.discount = discount;
-   const price = basePrice * discount;
-   return price;
-};
+var router = new Router();
 
 
-insuranceRouter.get('/price/:type', async (req, res) => {
+router.get('/price/:type', async (req, res) => {
    try {
-      const userId = res.locals.userId;
-      const insuranceType = req.params.type;
+      var userId = res.locals.userId;
+      var insuranceType = req.params.type;
 
-      const conn = await pool.getConnection();
-      const insuranceRows = await conn.query(
+      var conn = await pool.getConnection();
+      var price = await conn.query(
          `SELECT * FROM insurance WHERE type = '${insuranceType}'`
       );
-      const agreementsRows = await conn.query(`
+      var count = await conn.query(`
          SELECT COUNT(*) AS count FROM agreements
          WHERE userId = ${userId} AND status = 1
       `);
-      conn.release();
 
-      const basePrice = insuranceRows[0].price;
-      const completedAgreementsCount = agreementsRows[0].count;
-      const price = calculatePrice(res, basePrice, completedAgreementsCount);
+      price = price[0].price;
+      count = count[0].count;
+      // for each successfully completed agreement
+      // the client receives a 1 percent discount
+      price = price * (100 - count) / 100;
 
-      const insuranceOffer = new InsuranceOffer();
+      var insuranceOffer = new InsuranceOffer();
       insuranceOffer.type = insuranceType;
       insuranceOffer.price = price;
+
+      await applyPromo(insuranceOffer);
 
       res.status(200).send(insuranceOffer);
    }
@@ -44,4 +40,12 @@ insuranceRouter.get('/price/:type', async (req, res) => {
    }
 });
 
-module.exports = usersRouter;
+async function applyPromo(offer) {
+   var promo = await redisClient.getPromo();
+   if (promo) {
+      offer.price = offer.price * promo.discount;
+      offer.promo = true;
+   }
+}
+
+module.exports = router;
