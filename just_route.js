@@ -1,6 +1,6 @@
 var { Router } = require('express');
 var { pool } = require('../db');
-var redisClient = require('../redis');
+var PromoService = require('../services/promo');
 var { InsuranceOffer } = require('../models/InsuranceOffer');
 
 var router = new Router();
@@ -41,7 +41,7 @@ router.get('/price/:type', async (req, res) => {
 });
 
 async function applyPromo(offer) {
-   var promo = await redisClient.getPromo();
+   var promo = await PromoService.getPromo();
    if (promo) {
       offer.price = offer.price * promo.discount;
       offer.promo = true;
